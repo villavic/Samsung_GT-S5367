@@ -1,0 +1,7 @@
+# FC8101 Device Driver
+config FC81XX
+	boolean "FCI device driver for ISDB-T"
+        depends on LTN_DTV
+	default N
+	help
+	  FCI Device Driver for ISDB-T
