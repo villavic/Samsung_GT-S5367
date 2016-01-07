@@ -112,7 +112,7 @@ config BCM_LCD_SKIP_INIT
 
 config ARGB8888
     bool "Enable 24bit colour mode"
-    depends on BCM_LCD_NT35582 || BCM_LCD_R61581
+    depends on BCM_LCD_NT35582 || BCM_LCD_R61581 || BCM_LCD_S6D04H0A01_TASSVE
     default n
     ---help---
     Say Y to enable 24bit colour mode

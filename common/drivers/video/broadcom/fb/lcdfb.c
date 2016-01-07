@@ -156,7 +156,7 @@ module_param(videomemorysize, int, 0);
 /*  Thsee variables are used to control the periodic LCD refresh. */
 #define DEFAULT_LCD_REFRESH_TIMEOUT HZ
 /* enable timer based auto-update of dirty buffers */
-static int gLcdRefreshOn;
+static int gLcdRefreshOn = 1;
 static int gLcdRefreshFreq = HZ / 2;
 static int gLcdRefreshTimeout = DEFAULT_LCD_REFRESH_TIMEOUT;
 static long gLcdRefreshThreadId;
@@ -198,12 +198,20 @@ static struct fb_var_screeninfo lcdfb_default __initdata = {
 	/* .bits_per_pixel = calculated */
 	.xoffset = 0,
 	.yoffset = 0,
-	.bits_per_pixel = 16,
 	.grayscale = 0,
+#ifdef CONFIG_ARGB8888
+	.bits_per_pixel = 32,
+	.blue.offset = 0, .blue.length = 8,
+	.green.offset = 8, .green.length = 8,
+	.red.offset = 16, .red.length = 8,
+	.transp.offset = 24, .transp.length = 8,
+#else
+	.bits_per_pixel = 16,
 	.red = {11, 5, 0},	/* for 16 bpp */
 	.green = {5, 6, 0},	/* for 16 bpp */
 	.blue = {0, 5, 0},	/* for 16 bpp */
 	.transp = {0, 0, 0},
+#endif
 	.activate = FB_ACTIVATE_NOW,
 	.height = 320,
 	.width = 240,
@@ -252,7 +260,7 @@ static struct fb_ops lcdfb_ops = {
 	.fb_imageblit = cfb_imageblit,
 #endif
 	.fb_rotate = NULL,
-	.fb_sync = lcdfb_sync,
+/*	.fb_sync = lcdfb_sync, */
 	.fb_ioctl = lcdfb_ioctl,
 };
 
@@ -411,7 +419,7 @@ static int lcdfb_ioctl(struct fb_info *info, u_int cmd, u_long arg)
 		{
 			/*  If the use has called this command, it means they want to */
 			/*  control LCD refreshes.  Turn off our timer. */
-			gLcdRefreshOn = 0;
+			// gLcdRefreshOn = 0;
 
 			if (copy_from_user
 			    (&dirtyRows, (LCD_DirtyRows_t *) arg,
@@ -519,13 +527,25 @@ static int lcdfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 			if (regno < 16) {
 				u32 *pal = info->pseudo_palette;
 
-				val = ChanToField(red, &info->var.red, bpp);
-				val |=
-				    ChanToField(green, &info->var.green, bpp);
-				val |= ChanToField(blue, &info->var.blue, bpp);
-				val |=
-				    ChanToField(trans, &info->var.transp, bpp);
-
+				/*
+				 * Only supported bpp are 16 and 32. Code bits stolen
+				 * from vesafb.c.
+				 */
+				switch(bpp) {
+				case 16: /* Only supported ARGB 16bpp format is 0565. */
+					val = 	((red   & 0xf800)      ) |
+						((green & 0xfc00) >>  5) |
+						((blue  & 0xf800) >> 11);
+					break;
+				case 32:
+					red   >>= 8;
+					green >>= 8;
+					blue  >>= 8;
+					val = 	(red   << info->var.red.offset)   |
+						(green << info->var.green.offset) |
+						(blue  << info->var.blue.offset);
+					break;
+				}
 				pal[regno] = val;
 				rc = 0;
 			}
@@ -1228,6 +1248,7 @@ int __init lcdfb_init(void)
 	LCD_Info_t lcdInfo;
 	int ret = 0;
 
+	memset(&lcdInfo, 0, sizeof(LCD_Info_t));
 #ifndef MODULE
 	char *option = NULL;
 
